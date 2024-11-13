@@ -1,0 +1,58 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Airflow logs and database files
+logs/
+*.log
+airflow.db
+*.pid
+
+# Airflow compiled Python bytecode
+**/*.pyc
+
+# Environment variable and configuration files
+.env
+*.env
+
+# Docker-related files
+docker-compose.override.yml
+docker-compose.*.yml
+.dockerignore
+
+# Postgres data
+postgres_data/
+
+# Airflow DAGs cache (if using compiled DAGs)
+dags/__pycache__/
+
+# System files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# VS Code specific settings (if using VS Code)
+.vscode/
+
+# Python virtual environment
+venv/
+.env/
+.venv/
+env/
+
+# PyCharm specific settings (if using PyCharm)
+.idea/
+*.iml
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Temporary files and backups
+*.bak
+*.swp
+*~
+
+# Ignore node_modules in case you're using Node.js (like for a frontend)
+node_modules/
