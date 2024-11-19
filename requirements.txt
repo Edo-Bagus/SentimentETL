@@ -1,0 +1,4 @@
+asyncpraw
+python-dotenv
+google-api-python-client
+langdetect
