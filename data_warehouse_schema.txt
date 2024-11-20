@@ -1,0 +1,72 @@
+CREATE TABLE default.comment_dim
+(
+    `comment_id` String,
+    `post_id` String,
+    `user_id` UInt64,
+    `parent_comment_id` String,
+    `comment_text` String,
+    `language` String,
+    `engagement_score` UInt32,
+    `comment_depth` Int16,
+    `time_id` UInt64
+)
+ENGINE = SharedMergeTree('/clickhouse/tables/{uuid}/{shard}', '{replica}')
+ORDER BY comment_id
+SETTINGS index_granularity = 8192
+
+CREATE TABLE default.platform_dim
+(
+    `platform_id` UInt16,
+    `platform_name` String
+)
+ENGINE = SharedMergeTree('/clickhouse/tables/{uuid}/{shard}', '{replica}')
+ORDER BY platform_id
+SETTINGS index_granularity = 8192
+
+CREATE TABLE default.post_dim
+(
+    `post_id` String,
+    `platform_id` UInt16,
+    `title` String,
+    `description` String,
+    `url` String,
+    `engagement_score` UInt32,
+    `time_id` UInt64
+)
+ENGINE = SharedMergeTree('/clickhouse/tables/{uuid}/{shard}', '{replica}')
+ORDER BY post_id
+SETTINGS index_granularity = 8192
+
+CREATE TABLE default.sentiment_fact
+(
+    `sentiment_id` UUID,
+    `comment_id` String,
+    `platform_id` Int16,
+    `time_id` UInt64,
+    `sentiment_score` Float32,
+    `sentiment_label` String
+)
+ENGINE = SharedMergeTree('/clickhouse/tables/{uuid}/{shard}', '{replica}')
+PARTITION BY platform_id
+ORDER BY sentiment_id
+SETTINGS index_granularity = 8192
+
+CREATE TABLE default.time_dim
+(
+    `time_id` UInt64,
+    `day_of_week` String,
+    `time` DateTime
+)
+ENGINE = SharedMergeTree('/clickhouse/tables/{uuid}/{shard}', '{replica}')
+ORDER BY time_id
+SETTINGS index_granularity = 8192
+
+CREATE TABLE default.user_dim
+(
+    `user_id` UInt64,
+    `username` String,
+    `platform_id` UInt16
+)
+ENGINE = SharedMergeTree('/clickhouse/tables/{uuid}/{shard}', '{replica}')
+ORDER BY user_id
+SETTINGS index_granularity = 8192

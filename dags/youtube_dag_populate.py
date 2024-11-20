@@ -33,11 +33,11 @@ default_args = {
 
 # Initialize the DAG
 with DAG(
-    dag_id='youtube_ETL_daily',
+    dag_id='youtube_ETL_populate',
     default_args=default_args,
-    description='DAG to extract YouTube videos and comments',
-    schedule_interval='0 22 * * *',  # Still specified in local timezone
-    start_date=datetime(2024, 11, 20),
+    description='DAG to extract YouTube videos and comments and populate it for the first time',
+    schedule_interval=None,  # Still specified in local timezone
+    start_date=datetime(2024, 11, 19),
     catchup=False,
 ) as dag:
     
@@ -53,7 +53,7 @@ with DAG(
 
     def extract_videos(**kwargs):
         """Extract YouTube videos based on a query."""
-        query = [
+        queries = [
             # Hardware-Related Queries
             "iPhone performance review",
             "iPhone overheating issues",
@@ -84,7 +84,7 @@ with DAG(
             "iPhone 15 keynote reactions",
             "iPhone price review",
         ]
-        videos = fetch_youtube_videos(query, API_KEY)
+        videos = fetch_youtube_videos(queries, API_KEY)
         print(f"Extracted video IDs: {videos}")
         # Push video_ids to XCom for the next task
         kwargs['ti'].xcom_push(key='videos', value=videos)

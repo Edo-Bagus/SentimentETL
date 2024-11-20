@@ -1,153 +1,118 @@
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from datetime import datetime
+from etl.transform import format_timestamp
 
-def fetch_youtube_videos(query, api_key, max_results=10, all_pages=False):
+
+def fetch_youtube_videos(queries, api_key, max_results=50, all_pages=False):
     """
-    Searches YouTube for videos based on a query and returns video details.
+    Fetch YouTube videos for given queries using YouTube Data API.
 
-    Parameters:
-    - query (str): The search query.
-    - api_key (str): Your YouTube Data API key.
-    - max_results (int): The maximum number of results per page (default is 10).
-    - all_pages (bool): Whether to fetch all pages or just the first page (default is False).
+    Args:
+        queries (list): List of search queries.
+        api_key (str): YouTube Data API key.
+        max_results (int): Maximum results per page (default: 50).
+        all_pages (bool): Fetch all pages if True, otherwise only first page.
 
     Returns:
-    - List[dict]: A list of dictionaries containing video details, such as video ID, title, description, URL, and publish time.
+        list[dict]: List of video details (ID, title, description, URL, etc.).
     """
-    # Initialize the YouTube Data API client
     youtube = build("youtube", "v3", developerKey=api_key)
-
-    # Get the start of the current day in UTC and convert it to RFC 3339 format
     today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-    published_after = today_start.isoformat() + "Z"  # Convert to RFC 3339 format
+    published_after = today_start.isoformat() + "Z"
+    all_videos = []
 
-    # List to hold all video details
-    videos = []
+    for query in queries:
+        videos = []
+        request = youtube.search().list(
+            q=query, part="id,snippet", type="video", maxResults=max_results, publishedAfter=published_after
+        )
 
-    # Initialize the search request for the first page of results
-    request = youtube.search().list(
-        q=query,
-        part="id,snippet",
-        type="video",
-        maxResults=max_results,
-        publishedAfter=published_after
-    )
+        # Paginate through results if required
+        while request:
+            response = request.execute()
+            for item in response.get("items", []):
+                video_id = item["id"]["videoId"]
+                videos.append({
+                    "post_id": video_id,
+                    "title": item["snippet"]["title"],
+                    "body": item["snippet"]["description"],
+                    "url": f"https://www.youtube.com/watch?v={video_id}",
+                    "timestamp": format_timestamp(item["snippet"]["publishedAt"]),
+                    "score": 0
+                })
 
-    # Loop to process multiple pages of results if needed
-    while request:
-        # Execute the request and get the response
-        response = request.execute()
+            if not all_pages or "nextPageToken" not in response:
+                break
 
-        # Extract video details from the response
-        for item in response.get("items", []):
-            video_id = item["id"]["videoId"]
-            title = item["snippet"]["title"]
-            description = item["snippet"]["description"]
-            publish_time_str = item["snippet"]["publishedAt"]
-            
-            # Append video details to the list
-            videos.append({
-                "video_id": video_id,
-                "title": title,
-                "description": description,
-                "url": f"https://www.youtube.com/watch?v={video_id}",
-                "publishTime": publish_time_str
-            })
-
-        # If only the first page is needed, break out of the loop
-        if not all_pages:
-            break
-
-        # If there is a next page, update the request with the nextPageToken
-        if "nextPageToken" in response:
             request = youtube.search().list(
-                q=query,
-                part="id,snippet",
-                type="video",
-                maxResults=max_results,
-                publishedAfter=published_after,
-                pageToken=response["nextPageToken"]
+                q=query, part="id,snippet", type="video", maxResults=max_results,
+                publishedAfter=published_after, pageToken=response["nextPageToken"]
             )
-        else:
-            # No more pages available, exit the loop
-            request = None
 
-    return videos
+        all_videos.extend(videos)
 
-def fetch_youtube_comments(video_ids, api_key, max_results=5):
+    return all_videos
+
+
+def fetch_youtube_comments(video_ids, api_key, max_results=100):
     """
-    Fetches top-level comments and their replies for a list of YouTube videos.
+    Fetch comments (top-level and replies) for given video IDs.
 
-    Parameters:
-    - video_ids (list): List of YouTube video IDs.
-    - api_key (str): Your YouTube Data API key.
-    - max_results (int): Maximum number of comments and replies to fetch per request.
+    Args:
+        video_ids (list): List of video IDs.
+        api_key (str): YouTube Data API key.
+        max_results (int): Maximum comments per request (default: 100).
 
     Returns:
-    - List[dict]: A list of dictionaries containing comment details, including language.
+        list[dict]: List of comments with details (ID, author, body, timestamp, etc.).
     """
     youtube = build("youtube", "v3", developerKey=api_key)
     all_comments = []
 
     for video_id in video_ids:
         try:
-            # Step 1: Fetch top-level comments for the current video
+            # Fetch top-level comments
             top_level_request = youtube.commentThreads().list(
-                part="id,snippet",
-                videoId=video_id,
-                textFormat="plainText",
-                order="relevance",
-                maxResults=max_results
+                part="id,snippet", videoId=video_id, textFormat="plainText", order="relevance", maxResults=max_results
             )
             top_level_response = top_level_request.execute()
 
             for item in top_level_response.get("items", []):
-                # Extract top-level comment details
                 top_comment = item["snippet"]["topLevelComment"]["snippet"]
                 comment_id = item["id"]
-                text = top_comment["textOriginal"]
-                likes = top_comment.get("likeCount", 0)  # Get like count (score)
-
                 all_comments.append({
-                    "video_id": video_id,
-                    "comment_id": comment_id,
-                    "text": text,
+                    "post_id": video_id,
+                    "id": comment_id,
+                    "body": top_comment["textOriginal"],
                     "author": top_comment.get("authorDisplayName"),
-                    "publish_time": top_comment["publishedAt"],
+                    "timestamp": format_timestamp(top_comment["publishedAt"]),
                     "depth": 0,
-                    "parent_id": None,
-                    "score": likes  # Add score (likes)
+                    "parent_id": '',
+                    "score": top_comment.get("likeCount", 0)
                 })
 
-                # Step 2: Fetch replies to the top-level comment
+                # Fetch replies to the top-level comment if available
                 if item["snippet"]["totalReplyCount"] > 0:
                     reply_request = youtube.comments().list(
-                        part="snippet",
-                        parentId=comment_id,
-                        textFormat="plainText",
-                        maxResults=max_results
+                        part="snippet", parentId=comment_id, textFormat="plainText", maxResults=max_results
                     )
                     reply_response = reply_request.execute()
-
                     for reply_item in reply_response.get("items", []):
                         reply = reply_item["snippet"]
-                        reply_text = reply["textOriginal"]
-                        reply_likes = reply.get("likeCount", 0)  # Get like count (score)
-
                         all_comments.append({
-                            "video_id": video_id,
-                            "comment_id": reply_item["id"],
-                            "text": reply_text,
+                            "post_id": video_id,
+                            "id": reply_item["id"],
+                            "body": reply["textOriginal"],
                             "author": reply.get("authorDisplayName"),
-                            "publish_time": reply["publishedAt"],
+                            "timestamp": format_timestamp(reply["publishedAt"]),
                             "depth": 1,
                             "parent_id": comment_id,
-                            "score": reply_likes  # Add score (likes) for the reply
+                            "score": reply.get("likeCount", 0)
                         })
 
         except HttpError as e:
-            error_reason = e.error_details[0]['reason'] if 'reason' in e.error_details[0] else 'unknown'
+            error_reason = e.error_details[0].get('reason', 'unknown')
             if error_reason == 'commentsDisabled':
                 print(f"Comments are disabled for video ID: {video_id}. Skipping...")
             else:
